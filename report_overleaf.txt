@@ -1,0 +1,195 @@
+% =====================================================================
+%  EE4775 Object Classification with Radar - 1-page project description
+%  HOW TO USE ON OVERLEAF:
+%   1. New Project -> Blank Project. Delete the default main.tex contents
+%      and paste everything below.
+%   2. Create a folder named  figures  and upload these 3 PNGs into it
+%      (they were exported from your notebooks, root/figures/):
+%         activity_grid.png   cm_ds1_svm.png   gen_bar.png
+%      The file compiles even before you upload them (you get labelled
+%      placeholder boxes), so you can see the layout immediately.
+%   3. Fill in the three author names + student numbers below.
+%   4. Compile with pdfLaTeX. It is tuned to fit on ONE page.
+%
+%  IF IT SPILLS TO A 2ND PAGE, turn any of these knobs (in order):
+%   - lower the hero figure height: change "height=4.8cm" (Fig. grid) to 4.2cm
+%   - shrink the two small figures: 0.86\linewidth -> 0.78 , 0.92 -> 0.84
+%   - margins: [margin=1.35cm] -> 1.2cm     - or drop \parskip 3pt -> 2pt
+% =====================================================================
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1.35cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{titlesec}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{amsmath}
+
+\graphicspath{{figures/}{./}}
+
+% --- compact spacing so it fits one page ---
+\captionsetup{font=footnotesize,labelfont=bf,skip=3pt}
+\titlespacing*{\section}{0pt}{5pt}{2pt}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.5em}{}
+\setlength{\columnsep}{16pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\pagestyle{empty}
+
+% --- figure helper: show the image if uploaded, else a neat placeholder ---
+% so the document always compiles. Checks figures/ then the project root,
+% so it works whether you upload the PNGs into a figures/ folder or flat.
+% #1 = filename, #2 = graphicx options.
+\newcommand{\figeps}[2]{%
+  \IfFileExists{figures/#1}{\includegraphics[#2]{figures/#1}}%
+  {\IfFileExists{#1}{\includegraphics[#2]{#1}}%
+   {\framebox[\linewidth]{\rule{0pt}{2.8cm}\footnotesize\ttfamily upload #1\ }}}}
+
+% --- key-result highlight box ---
+\definecolor{keybg}{RGB}{238,243,250}
+\newcommand{\keyline}[1]{%
+  \begingroup\setlength{\fboxsep}{6pt}%
+  \colorbox{keybg}{\parbox{\dimexpr\linewidth-2\fboxsep}{\small #1}}\endgroup}
+
+% =====================================================================
+\begin{document}
+
+% ---- full-width title block ----
+\twocolumn[{%
+\centering
+{\LARGE\bfseries Human Activity Classification with FMCW Radar Micro-Doppler}\\[4pt]
+{\normalsize EE4775 -- Object Classification with Radar, TU Delft \quad(Dr.\ F.\ Fioranelli)}\\[3pt]
+{\normalsize \textit{Author One} (1234567) \quad \textit{Author Two} (2345678) \quad \textit{Author Three} (3456789)}\\[8pt]
+\begin{minipage}{0.97\linewidth}
+\keyline{\textbf{Result in one line.} On clean single-site data, 26 interpretable
+physical micro-Doppler features into an SVM match a fine-tuned ResNet18 at
+$\approx\!0.96$ subject-independent accuracy. Transferring from young lab subjects
+to elderly people in care homes drops accuracy to $\approx\!0.77$, and the CNN's
+extra capacity does not help: the gap is driven by population and radar geometry,
+not model size.}
+\end{minipage}\\[6pt]
+}]
+
+% ---- wide hero figure ----
+\begin{figure*}[t]
+\centering
+\figeps{activity_grid.png}{width=\textwidth,height=4.8cm,keepaspectratio}
+\caption{Micro-Doppler signatures of the six activities (dataset~1, one subject),
+the input the classifier reads. Walking is a sustained periodic limb pattern; the
+others are transients; falling is the strongest, broadest Doppler burst. Cropped to
+$|v|\le 6$\,m/s, resampled to $128\times128$, per-image dB.}
+\label{fig:grid}
+\end{figure*}
+
+\section{Problem and data}
+We classify radar recordings of six daily activities (walking, sitting down,
+standing up, picking up an object, drinking, falling) from their micro-Doppler
+signatures. The data is the University of Glasgow INSHEP set: 1754 \texttt{.dat}
+recordings from an Ancortek FMCW radar (5.8\,GHz carrier, 400\,MHz bandwidth, 1\,ms
+sweep, 128 samples/sweep, 1\,kHz PRF) across seven campaigns. Datasets~1--5 are
+mostly young adults in labs and offices; datasets~6--7 are elderly people in care
+settings (ages up to 98).
+
+Parsing the filenames surfaced three facts that shape the work. (i)~Activity is read
+from the \texttt{Ayy} field, the field the provided \texttt{Label\_extract4.m} uses;
+the redundant leading digit disagrees with it in three files (typos). (ii)~Subject
+IDs restart per campaign, so the same \texttt{Pxx} is a different person in different
+datasets; \emph{all} evaluation therefore holds out whole \texttt{(dataset, subject)}
+pairs. (iii)~Fall is the minority class (197 vs $\approx$312 per class) and is
+essentially absent from the two care sites, so cross-site tests use the five shared
+classes. The README datasheet and the MATLAB comment also disagree on the names of
+activities~4 and~5; we follow the README (authoritative) and flag it.
+
+\section{Signal processing}
+Each recording becomes a velocity-vs-time image, following the provided
+\texttt{DataProcessingExample.m}: an FFT along fast time (within a sweep) gives range;
+a 4th-order Butterworth high-pass along slow time (MTI) removes static clutter; a
+short-time FFT along slow time, summed over the target range bins, gives the
+micro-Doppler spectrogram, with $v=f_d\,c/(2 f_c)$. We crop to the human velocity band
+($|v|\le 6$\,m/s), resample to a fixed $128\times128$ image so recording-length
+differences do not leak in, and normalise to dB referenced to each image's maximum over
+a 40\,dB range. The same input feeds both classifiers; preprocessing is run once and
+cached. We verified the port against the MATLAB example on a walking file.
+
+\section{Models and evaluation}
+We compare two approaches on identical subject-independent splits (GroupKFold on the
+\texttt{(dataset, subject)} key). The first is interpretable: 26 physical descriptors
+per spectrogram (Doppler centroid and bandwidth trajectories, torso/limb and
+approach/recede energy split, temporal envelope) into an RBF SVM. The second is a
+ResNet18 fine-tuned on the dB image (first convolution reduced to one channel,
+pretrained weights averaged), trained on an Apple-silicon GPU. The CNN's epoch is
+selected on an inner subject-held-out split, so the test fold is never used for model
+selection.
+
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Setting & SVM & ResNet18 \\
+\midrule
+Dataset~1, subj.-indep.\ 5-fold      & $0.961\pm0.014$ & $0.964\pm0.036$ \\
+Lab pool within-source (5-class)     & $0.891\pm0.022$ & -- \\
+Lab $\rightarrow$ care (5-class)     & $0.767$         & $0.761\pm0.045$ \\
+\quad NG Homes / West Cumbria        & $0.789 / 0.744$ & -- \\
+\bottomrule
+\end{tabular}
+\caption{Accuracy, all subject-independent. RandomForest reaches
+$0.939\pm0.038$ on dataset~1. CNN figures averaged over seeds (MPS is not
+bit-reproducible); the conclusions do not move with the seed.}
+\label{tab:res}
+\end{table}
+
+\section{Results on clean data}
+On dataset~1 (balanced, single site) both models reach $\approx\!0.96$
+(Table~\ref{tab:res}); the SVM matches the CNN at a fraction of the cost ($\sim$1\,s
+vs $\sim$45\,s) and stays fully interpretable. The errors are physical
+(Fig.~\ref{fig:cm}): walking is near perfect; the dominant confusion is pick vs drink,
+both low-velocity arm motions with similar Doppler extent; the sit/stand mirror pair,
+which we expected to be hardest, is largely resolved by the directional (positive vs
+negative Doppler) features. On clean single-site data, model capacity is not the
+bottleneck.
+
+\begin{figure}[t]
+\centering
+\figeps{cm_ds1_svm.png}{width=0.86\linewidth}
+\caption{SVM confusion matrix on dataset~1 (subject-independent). Walking is
+near-perfect; pick$\leftrightarrow$drink is the dominant error.}
+\label{fig:cm}
+\end{figure}
+
+\section{Generalisation: the headline}
+Training on the lab/university pool (datasets~1--5) and testing on the elderly care
+sites (datasets~6--7), five-class, accuracy falls from $\approx\!0.89$ within the lab
+pool to $\approx\!0.77$ on the care data, and to $0.74$ for West Cumbria
+(Fig.~\ref{fig:gen}). The CNN does \emph{not} generalise better than the SVM: averaged
+over seeds it lands at the same place and is less stable, so the extra capacity buys no
+cross-domain robustness. We measure two causes. First, the elderly perform pick and
+drink more slowly and with smaller motions, deepening that already-similar confusion.
+Second, the range-bin window fixed on the lab data captures only $0.39$--$0.54$ of the
+care-home return (vs $0.68$--$0.75$ in the lab) because those subjects stand closer to
+the radar: a geometry shift on top of the age and site shift.
+
+\begin{figure}[t]
+\centering
+\figeps{gen_bar.png}{width=0.92\linewidth}
+\caption{Per-target accuracy (lab-trained SVM) against the within-source CV ceiling
+(dashed). A $\sim$12--15 point cross-site generalisation gap.}
+\label{fig:gen}
+\end{figure}
+
+\section{Conclusions and next steps}
+Micro-Doppler spectrograms separate these activities well, and on clean data simple
+interpretable features match a fine-tuned CNN, so the simpler, cheaper, explainable
+model is preferable here. The honest result is the generalisation gap: a model is only
+as good as the population and geometry it was trained on. Concrete next steps:
+re-centre the range window per site (it currently clips the care return), add a small
+amount of in-domain care data (domain adaptation), and report fall separately given its
+scarcity at the care sites.
+
+\end{document}
