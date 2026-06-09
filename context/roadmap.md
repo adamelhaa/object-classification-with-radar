@@ -3,6 +3,10 @@
 Provisional. Each step ends in a finding that justifies the next. Update as we
 go. "Done" means observed and logged in `decisions_log.md`.
 
+Status: Phases 0-6 complete. Sandbox scripts settled every choice (D1-D14); the
+five notebooks, the saved models, the one-pager and the presentation outline are
+built from them. See `decisions_log.md` for the evidence behind each step.
+
 ## Phase 0 — Foundations  (done)
 - [x] Read README, MATLAB example, label extractor, course slide deck.
 - [x] Confirm `.dat` format and the physical meaning of the samples.
